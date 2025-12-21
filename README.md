@@ -1,4 +1,5 @@
-# <img src="https://tripletail.blueberry.coffee/logo.webp" valign="middle"> Tripletail FM for 3DS
+# Tripletail FM for 3DS
+# <img src="https://tripletail.blueberry.coffee/logo.webp" width="400">
 
 > "I have a 3DS and way too much free time."
 
@@ -24,4 +25,5 @@ A: I have no clue?? maybe if you have it plugged in lmao
 - **C99**: because uhh, saturn is gonna look at this and complain so lol
 - **libctru**: ACTUALLY GOATEDD WORKKKKKK
 - **citro2d**: SO GLAD THIS EXISTS, THANK YOUUUUU CITRO2D
+
 - **mbedtls**: yet again, i am so glad a lightweight embedded ssl library exists
