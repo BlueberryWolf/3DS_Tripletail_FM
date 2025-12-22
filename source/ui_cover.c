@@ -18,6 +18,10 @@ static C2D_Image coverImg;
 static bool hasCover = false;
 static char lastArtUrl[256] = {0};
 
+// text for when the cover art isn't yet downloaded.
+static C2D_TextBuf g_static_buffer;
+static C2D_Font g_font;
+
 // proxy url base
 static const char *PROXY_BASE = "https://tripletail-socket.blueberry.coffee/api/convert-image?url=";
 
@@ -77,6 +81,9 @@ void UI_Cover_Init(void) {
     
     cover_quit = false;
     coverThread = threadCreate(cover_worker, NULL, COVER_STACK_SIZE, THREAD_PRIO_COVER, -1, false);
+
+    g_static_buffer = C2D_TextBufNew(128);
+    g_font = C2D_FontLoadSystem(CFG_REGION_USA);
 }
 
 void UI_Cover_Exit(void) {
@@ -86,6 +93,9 @@ void UI_Cover_Exit(void) {
     
     if (pendingData) free(pendingData);
     if (coverDmaBuffer) linearFree(coverDmaBuffer);
+
+    C2D_TextBufDelete(g_static_buffer);
+    C2D_FontFree(g_font);
 }
 
 // called from worker thread
@@ -135,5 +145,34 @@ void UI_Cover_Draw(float x, float y, float w, float h) {
         float scaleY = h / imgH;
 
         C2D_DrawImageAt(coverImg, x, y, 0.5f, NULL, scaleX, scaleY);
+    }
+    else {
+        C2D_DrawRectSolid(x, y, 0.5f, w, h, C2D_Color32(40, 40, 40, 255));
+
+        C2D_Text text;
+        C2D_TextBufClear(g_static_buffer);
+
+        const char* label_text = "fetching cover art";
+        C2D_TextFontParse(&text, g_font, g_static_buffer, label_text);
+        C2D_TextOptimize(&text);
+
+        float text_w, text_h;
+        C2D_TextGetDimensions(&text, 
+            0.5F, 0.5F, // text scale
+            &text_w, &text_h);
+
+        const float text_x = x + (w - text_w) * 0.5F;
+        const float text_y = y + (h - text_h) * 0.5F;
+
+        C2D_DrawText(
+            &text,
+            C2D_WithColor,
+            text_x,
+            text_y,
+            0.5F, // z? was y in patch but y arg is usually depth
+            0.5F, // text scale
+            0.5F, // text scale
+            C2D_Color32(127, 127, 127, 255)
+        );
     }
 }

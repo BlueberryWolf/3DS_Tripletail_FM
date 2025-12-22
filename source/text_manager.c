@@ -4,15 +4,16 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define CACHE_SIZE 128
-#define STATIC_BUF_SIZE 65536
+// reduced cache size since we only use this for UI labels essentially
+#define CACHE_SIZE 64
+// 8192 glyphs is plenty
+#define BUF_SIZE 8192
 
 typedef struct {
   size_t id;
   C2D_Text text;
   char *content;
   bool in_use;
-  u64 last_used_frame;
   // cached dimensions
   float width;
   float height;
@@ -22,13 +23,11 @@ typedef struct {
 static struct {
   C2D_TextBuf buffer;
   TextCacheEntry cache[CACHE_SIZE];
-  u64 frame_count;
 } g_tm;
 
 void Text_Init(void) {
-  g_tm.buffer = C2D_TextBufNew(STATIC_BUF_SIZE);
+  g_tm.buffer = C2D_TextBufNew(BUF_SIZE);
   memset(g_tm.cache, 0, sizeof(g_tm.cache));
-  g_tm.frame_count = 0;
 }
 
 void Text_Exit(void) {
@@ -41,24 +40,22 @@ void Text_Exit(void) {
 }
 
 void Text_BeginFrame(void) {
-  g_tm.frame_count++;
+    // no-op: we manage buffer dynamically based on usage
+}
 
-  // clear buffer every ~10 seconds
-  #define BUFFER_CLEAR_THRESHOLD 600
-  
-  if (g_tm.frame_count % BUFFER_CLEAR_THRESHOLD == 0) {
+static void FlushCache(void) {
     C2D_TextBufClear(g_tm.buffer);
-    
-    // invalidate all cache entries
     for (int i = 0; i < CACHE_SIZE; i++) {
-      g_tm.cache[i].in_use = false;
+        g_tm.cache[i].in_use = false;
+        // don't free content/id, we keep them to match against,
+        // but they must be re-parsed before draw
     }
-  }
 }
 
 static TextCacheEntry *FindEntry(size_t id) {
   for (int i = 0; i < CACHE_SIZE; i++) {
-    if (g_tm.cache[i].in_use && g_tm.cache[i].id == id) {
+    // we check ID even if !in_use so we can reclaim the slot with same ID
+    if (g_tm.cache[i].id == id) {
       return &g_tm.cache[i];
     }
   }
@@ -66,69 +63,76 @@ static TextCacheEntry *FindEntry(size_t id) {
 }
 
 static TextCacheEntry *AllocEntry(void) {
-  // find empty
+  // try to find an empty slot (never used)
   for (int i = 0; i < CACHE_SIZE; i++) {
-    if (!g_tm.cache[i].in_use)
+    if (g_tm.cache[i].id == 0) // assume ID 0 is invalid/empty
       return &g_tm.cache[i];
   }
 
-  // find lru
-  int lru = 0;
-  for (int i = 1; i < CACHE_SIZE; i++) {
-    if (g_tm.cache[i].last_used_frame < g_tm.cache[lru].last_used_frame) {
-      lru = i;
-    }
+  // evict LRU
+  static int victim = 0;
+  TextCacheEntry *e = &g_tm.cache[victim];
+  victim = (victim + 1) % CACHE_SIZE;
+  
+  // free old content
+  if (e->content) {
+      free(e->content);
+      e->content = NULL;
   }
-
-  // free existing
-  if (g_tm.cache[lru].content) {
-    free(g_tm.cache[lru].content);
-    g_tm.cache[lru].content = NULL;
-  }
-  g_tm.cache[lru].in_use = false;
-
-  return &g_tm.cache[lru];
+  e->in_use = false;
+  return e;
 }
 
 static void UpdateEntry(TextCacheEntry *entry, size_t id, const char *str) {
-  if (entry->content && strcmp(entry->content, str) == 0) {
-    return;
-  }
+    // check if we need to flush buffer, just a guess. to be safe, if > 6000, flush
+    if (C2D_TextBufGetNumGlyphs(g_tm.buffer) > (BUF_SIZE - 512)) {
+        FlushCache();
+    }
 
-  if (entry->content)
-    free(entry->content);
-  entry->content = strdup(str);
-  entry->id = id;
-  entry->in_use = true;
-  entry->last_size = 0.0f;
+    if (entry->content && strcmp(entry->content, str) == 0 && entry->in_use) {
+        return; // already up to date and valid
+    }
 
-  C2D_TextParse(&entry->text, g_tm.buffer, str);
-  C2D_TextOptimize(&entry->text);
+    // update content
+    if (!entry->content || strcmp(entry->content, str) != 0) {
+        if (entry->content) free(entry->content);
+        entry->content = strdup(str);
+    }
+    
+    entry->id = id;
+    
+    // parse
+    // if FlushCache happened above, buffer is empty.
+    C2D_TextParse(&entry->text, g_tm.buffer, str);
+    C2D_TextOptimize(&entry->text); 
+    
+    entry->in_use = true;
+    entry->last_size = 0.0f; // invalidate dimensions
 }
 
 void Text_Draw(size_t id, const char *str, float x, float y, float size,
                u32 color, u32 flags) {
-  if (!str)
-    return;
+  if (!str) return;
 
   TextCacheEntry *entry = FindEntry(id);
 
   if (!entry) {
-    entry = AllocEntry();
-    UpdateEntry(entry, id, str);
-  } else if (!entry->in_use) {
-    UpdateEntry(entry, id, str);
+    entry = AllocEntry();  // this might evict someone
+    entry->id = id;        // mark id
+    entry->in_use = false; // not parsed yet
+    entry->content = NULL; // allocentry freed it or it's new
   }
+  
+  UpdateEntry(entry, id, str);
 
-  entry->last_used_frame = g_tm.frame_count;
+  // Draw
   C2D_DrawText(&entry->text, flags, x, y, 0.5f, size, size, color);
 }
 
 void Text_GetSize(size_t id, const char *str, float size, float *outW,
                   float *outH) {
   if (!str) {
-    *outW = 0;
-    *outH = 0;
+    *outW = 0; *outH = 0;
     return;
   }
 
@@ -136,23 +140,20 @@ void Text_GetSize(size_t id, const char *str, float size, float *outW,
   
   if (!entry) {
     entry = AllocEntry();
-    UpdateEntry(entry, id, str);
-  } else if (!entry->in_use) {
-    UpdateEntry(entry, id, str);
+    entry->id = id;
+    entry->in_use = false;
+    entry->content = NULL;
   }
 
-  entry->last_used_frame = g_tm.frame_count;
+  UpdateEntry(entry, id, str);
   
-  // check if there's cached dimensions for this size
-  if (entry->last_size == size && entry->width != 0.0f) {
-    // use cached dimensions
-    *outW = entry->width;
-    *outH = entry->height;
+  if (entry->last_size == size) {
+      *outW = entry->width;
+      *outH = entry->height;
   } else {
-    // calculate and cache
-    C2D_TextGetDimensions(&entry->text, size, size, outW, outH);
-    entry->width = *outW;
-    entry->height = *outH;
-    entry->last_size = size;
+      C2D_TextGetDimensions(&entry->text, size, size, outW, outH);
+      entry->width = *outW;
+      entry->height = *outH;
+      entry->last_size = size;
   }
 }

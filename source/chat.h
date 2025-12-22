@@ -9,6 +9,7 @@
 #define TYPING_TIMEOUT 3000
 #define MAX_REACTIONS 8
 #define MAX_REACT_USERS 5
+#include <citro2d.h>
 
 typedef struct {
   char emoji[16];
@@ -30,6 +31,11 @@ typedef struct {
   int reaction_count;
 
   bool deleted;
+
+  // rendering cache
+  C2D_Text msgText;
+  C2D_Text userText;
+  bool text_cached;
 } ChatMessage;
 
 typedef struct {
@@ -52,6 +58,7 @@ typedef struct {
 } ChatStore;
 
 extern ChatStore chat_store;
+extern LightLock chat_lock;
 
 void chat_init(void);
 void chat_process_packet(char *json_payload, size_t len);

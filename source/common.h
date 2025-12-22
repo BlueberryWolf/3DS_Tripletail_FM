@@ -7,13 +7,21 @@
 extern volatile bool s_quit;
 
 // thread priorities
-#define THREAD_PRIO_AUDIO 0x18    // high priority for audio streaming
-#define THREAD_PRIO_COVER 0x2B    // medium priority for cover art
-#define THREAD_PRIO_CHAT 0x30     // lower priority for chat
-#define THREAD_PRIO_METADATA 0x31 // lowest priority for metadata
+// main thread is usually 0x30.
+#define THREAD_PRIO_AUDIO 0x18    // critical for feeder
+#define THREAD_PRIO_DECODER 0x24  // balanced priority (between audio and main)
+
+#define THREAD_PRIO_COVER 0x31    // lower than main
+#define THREAD_PRIO_CHAT 0x31     // lower than main
+#define THREAD_PRIO_METADATA 0x32 // lowest
+
+#define RENDER_FPS_CAP 60
+
 
 // thread stack sizes
-#define AUDIO_STACK_SIZE (32 * 1024)
+#define AUDIO_STACK_SIZE (8 * 1024)   // smaller stack for feeder
+#define DECODER_STACK_SIZE (64 * 1024) // large stack for opus decoding
+
 #define CHAT_STACK_SIZE (32 * 1024)
 #define METADATA_STACK_SIZE (32 * 1024)
 #define COVER_STACK_SIZE (32 * 1024)

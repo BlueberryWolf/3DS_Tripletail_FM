@@ -10,6 +10,7 @@
 #define MAX_JSON_TOKENS 16384  // recent_messages can be massive jesus (i should make the backend return less)
 
 ChatStore chat_store;
+LightLock chat_lock;
 static uint32_t g_next_uid = 1;
 
 uint64_t chat_get_time_ms(void) { return osGetTime(); }
@@ -64,28 +65,97 @@ static int jsoneq(const char *json, jsmntok_t *t, const char *s) {
   return -1;
 }
 
+static int hex_digit(char c) {
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+  return 0;
+}
+
 static void json_token_str(const char *json, jsmntok_t *t, char *out,
                            int max_len) {
   if (!t || t->type != JSMN_STRING) {
     if (t && t->type == JSMN_PRIMITIVE) {
-      // fallback
+       // primitive fallback
+       int len = t->end - t->start;
+       if (len >= max_len) len = max_len - 1;
+       memcpy(out, json + t->start, len);
+       out[len] = 0;
+       return;
     } else {
       out[0] = 0;
       return;
     }
   }
-  int len = t->end - t->start;
-  if (len >= max_len)
-    len = max_len - 1;
-  memcpy(out, json + t->start, len);
-  out[len] = '\0';
+
+  int src = t->start;
+  int end = t->end;
+  int dst = 0;
+  
+  while (src < end && dst < max_len - 1) {
+    if (json[src] == '\\' && src + 1 < end) {
+      if (json[src + 1] == 'u' && src + 5 < end) {
+        // unicode escape \uXXXX
+        uint32_t cp = (hex_digit(json[src + 2]) << 12) |
+                      (hex_digit(json[src + 3]) << 8) |
+                      (hex_digit(json[src + 4]) << 4) |
+                      (hex_digit(json[src + 5]));
+        src += 6;
+        
+        // encode utf-8
+        if (cp < 0x80) {
+            if (dst < max_len - 1) out[dst++] = (char)cp;
+        } else if (cp < 0x800) {
+            if (dst < max_len - 2) {
+                out[dst++] = (char)(0xC0 | (cp >> 6));
+                out[dst++] = (char)(0x80 | (cp & 0x3F));
+            }
+        } else if (cp < 0x10000) {
+            if (dst < max_len - 3) {
+                out[dst++] = (char)(0xE0 | (cp >> 12));
+                out[dst++] = (char)(0x80 | ((cp >> 6) & 0x3F));
+                out[dst++] = (char)(0x80 | (cp & 0x3F));
+            }
+        }
+      } else {
+          switch (json[src + 1]) {
+            case '/':
+            case '"':
+            case '\\':
+              out[dst++] = json[src + 1];
+              src += 2;
+              break;
+            case 'n':
+              out[dst++] = '\n';
+              src += 2;
+              break;
+            case 't':
+              out[dst++] = '\t';
+              src += 2;
+              break;
+            case 'r':
+              out[dst++] = '\r';
+              src += 2;
+              break;
+            default:
+              out[dst++] = json[src++];
+              break;
+          }
+      }
+    } else {
+      out[dst++] = json[src++];
+    }
+  }
+  out[dst] = '\0';
 }
 
 void chat_init(void) {
   memset(&chat_store, 0, sizeof(ChatStore));
+  LightLock_Init(&chat_lock);
   srand(time(NULL));
   snprintf(chat_store.username, 32, "Floofer%d", rand() % 1000);
 }
+
 
 void chat_set_username(const char *name) {
   if (name && name[0]) {
@@ -113,6 +183,12 @@ static ChatMessage *get_msg_by_id(const char *id) {
 }
 
 static void add_message_to_store(ChatMessage *m, bool sort) {
+  // deduplicate
+  if (m->id[0]) {
+      ChatMessage *existing = get_msg_by_id(m->id);
+      if (existing) return;
+  }
+
   if (chat_store.count >= MAX_MSGS) {
     memmove(&chat_store.messages[0], &chat_store.messages[1],
             sizeof(ChatMessage) * (MAX_MSGS - 1));
@@ -252,7 +328,9 @@ static void handle_chat_message(const char *json, jsmntok_t *tokens,
     m.user_color_parsed = C2D_Color32(0, 255, 255, 255);   // default cyan
   }
 
+  LightLock_Lock(&chat_lock);
   add_message_to_store(&m, false);
+  LightLock_Unlock(&chat_lock);
 }
 
 static void handle_reaction_update(const char *json, jsmntok_t *tokens,
@@ -274,9 +352,12 @@ static void handle_reaction_update(const char *json, jsmntok_t *tokens,
     cur = skip_value(tokens, cur + 1, num_tokens);
   }
 
+  LightLock_Lock(&chat_lock);
   ChatMessage *m = get_msg_by_id(msgId);
-  if (!m)
+  if (!m) {
+    LightLock_Unlock(&chat_lock);
     return;
+  }
 
   int r_idx = -1;
   for (int i = 0; i < m->reaction_count; i++) {
@@ -320,6 +401,7 @@ static void handle_reaction_update(const char *json, jsmntok_t *tokens,
       }
     }
   }
+  LightLock_Unlock(&chat_lock);
 }
 
 static void handle_typing(const char *json, jsmntok_t *tokens, int idx,
@@ -414,9 +496,22 @@ void chat_process_packet(char *json_payload, size_t len) {
                tokens[2].type == JSMN_ARRAY) {
       int count = tokens[2].size;
       int cur = 3;
+      int skip = (count > 20) ? (count - 20) : 0;
+      
       for (int i = 0; i < count; i++) {
         if (cur >= num_toks)
           break;
+          
+        if (i < skip) {
+            // skip this message object without parsing
+            if (tokens[cur].type == JSMN_OBJECT) {
+                 cur = skip_value(tokens, cur, num_toks);
+            } else {
+                 cur++;
+            }
+            continue;
+        }
+        
         if (tokens[cur].type == JSMN_OBJECT) {
           handle_chat_message(json_payload, tokens, cur, num_toks, false);
           cur = skip_value(tokens, cur, num_toks);
@@ -424,8 +519,11 @@ void chat_process_packet(char *json_payload, size_t len) {
           cur++;
         }
       }
+      LightLock_Lock(&chat_lock);
       qsort(chat_store.messages, chat_store.count, sizeof(ChatMessage),
             compare_msgs);
+      LightLock_Unlock(&chat_lock);
+
     } else if (strcmp(event, "message_deleted") == 0) {
       handle_message_deleted(json_payload, tokens, 2, num_toks);
     } else if (strcmp(event, "reaction_added") == 0) {

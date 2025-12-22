@@ -25,6 +25,13 @@ static int jsoneq(const char *json, jsmntok_t *tok, const char *s) {
   return -1;
 }
 
+static int hex_digit(char c) {
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+  return 0;
+}
+
 static void json_token_str(const char *json, jsmntok_t *t, char *out,
                            size_t size) {
   int src = t->start;
@@ -33,28 +40,53 @@ static void json_token_str(const char *json, jsmntok_t *t, char *out,
   
   while (src < end && dst < size - 1) {
     if (json[src] == '\\' && src + 1 < end) {
-      switch (json[src + 1]) {
-        case '/':
-        case '"':
-        case '\\':
-          out[dst++] = json[src + 1];
-          src += 2;
-          break;
-        case 'n':
-          out[dst++] = '\n';
-          src += 2;
-          break;
-        case 't':
-          out[dst++] = '\t';
-          src += 2;
-          break;
-        case 'r':
-          out[dst++] = '\r';
-          src += 2;
-          break;
-        default:
-          out[dst++] = json[src++];
-          break;
+      if (json[src + 1] == 'u' && src + 5 < end) {
+        // unicode escape \uXXXX
+        uint32_t cp = (hex_digit(json[src + 2]) << 12) |
+                      (hex_digit(json[src + 3]) << 8) |
+                      (hex_digit(json[src + 4]) << 4) |
+                      (hex_digit(json[src + 5]));
+        src += 6;
+        
+        // encode utf-8
+        if (cp < 0x80) {
+            if (dst < size - 1) out[dst++] = (char)cp;
+        } else if (cp < 0x800) {
+            if (dst < size - 2) {
+                out[dst++] = (char)(0xC0 | (cp >> 6));
+                out[dst++] = (char)(0x80 | (cp & 0x3F));
+            }
+        } else if (cp < 0x10000) {
+            if (dst < size - 3) {
+                out[dst++] = (char)(0xE0 | (cp >> 12));
+                out[dst++] = (char)(0x80 | ((cp >> 6) & 0x3F));
+                out[dst++] = (char)(0x80 | (cp & 0x3F));
+            }
+        }
+      } else {
+          switch (json[src + 1]) {
+            case '/':
+            case '"':
+            case '\\':
+              out[dst++] = json[src + 1];
+              src += 2;
+              break;
+            case 'n':
+              out[dst++] = '\n';
+              src += 2;
+              break;
+            case 't':
+              out[dst++] = '\t';
+              src += 2;
+              break;
+            case 'r':
+              out[dst++] = '\r';
+              src += 2;
+              break;
+            default:
+              out[dst++] = json[src++];
+              break;
+          }
       }
     } else {
       out[dst++] = json[src++];

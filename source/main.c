@@ -16,7 +16,7 @@
 
 // global state
 volatile bool s_quit = false;
-static const char *STREAM_URL = "https://radio.blueberry.coffee/radio.ogg";
+static const char *STREAM_URL = "https://radio.blueberry.coffee/3ds.ogg";
 
 // threads
 static void metadata_thread_func(void *arg) {
@@ -32,6 +32,7 @@ int main(void) {
     render_init();
     osSetSpeedupEnable(true);
     net_init();
+    chat_init();
 
     // audio/stream
     SecureCtx ctx;
@@ -40,7 +41,9 @@ int main(void) {
         if (of) {
             if (audio_init()) {
                 // threads
-                Thread audioTh = threadCreate(audio_thread, of, AUDIO_STACK_SIZE, THREAD_PRIO_AUDIO, -1, false);
+                // threads
+                Thread decoderTh = threadCreate(audio_decoder_thread, of, DECODER_STACK_SIZE, THREAD_PRIO_DECODER, -1, false);
+                Thread audioTh = threadCreate(audio_thread, NULL, AUDIO_STACK_SIZE, THREAD_PRIO_AUDIO, -1, false);
                 Thread chatTh = threadCreate(chat_net_thread, NULL, CHAT_STACK_SIZE, THREAD_PRIO_CHAT, -1, false);
                 threadCreate(metadata_thread_func, NULL, METADATA_STACK_SIZE, THREAD_PRIO_METADATA, -1, true); // detached
 
@@ -75,6 +78,18 @@ int main(void) {
                         }
                     }
 
+#ifdef RENDER_FPS_CAP
+                    static int frame_tick = 0;
+                    frame_tick++;
+                    int skip = 60 / RENDER_FPS_CAP;
+                    if (skip < 1) skip = 1;
+                    
+                    if (frame_tick % skip != 0) {
+                        gspWaitForVBlank();
+                        continue;
+                    }
+#endif
+
                     render_chat();
                 }
 
@@ -84,6 +99,7 @@ int main(void) {
                 // signal audio thread to wake up and see exit flag
                 audio_signal_exit();
                 
+                threadJoin(decoderTh, UINT64_MAX);
                 threadJoin(audioTh, UINT64_MAX);
                 threadJoin(chatTh, UINT64_MAX);
                 // metaTh is detached

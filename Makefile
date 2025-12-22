@@ -50,7 +50,10 @@ GFXBUILD	:=	$(BUILD)
 #---------------------------------------------------------------------------------
 ARCH	:=	-march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
 
-CFLAGS  :=  -g -Wall -O2 -mword-relocations \
+# NOTE ffast-math might fuck some stuff up???
+
+CFLAGS  :=  -g -Wall -Wextra -Wshadow -Wimplicit -O2 -mword-relocations \
+			-ffast-math \
             -ffunction-sections \
             -std=c99 \
             $(ARCH)

@@ -190,7 +190,8 @@ bool net_download(const char *url, uint8_t **outBuf, size_t *outSize) {
 
   mbedtls_ssl_write(&ctx.ssl, (unsigned char*)req, len);
 
-  size_t capacity = 1024 * 1024; // 1mb
+  // initial capacity
+  size_t capacity = 32 * 1024; // start with 32KB
   uint8_t *buf = malloc(capacity);
   if (!buf) {
       cleanup_ssl(&ctx);
@@ -199,9 +200,29 @@ bool net_download(const char *url, uint8_t **outBuf, size_t *outSize) {
 
   size_t total = 0;
   int header_end = -1;
+  int content_length = -1;
 
   while(1) {
-      int r = mbedtls_ssl_read(&ctx.ssl, buf + total, capacity - total - 1);
+      // ensure space
+      if (total >= capacity) {
+          size_t new_cap = capacity * 2;
+          // check for overflow or insane size
+          if (new_cap > 16 * 1024 * 1024) { // 16MB limit
+              free(buf);
+              cleanup_ssl(&ctx);
+              return false;
+          }
+          uint8_t *tmp = realloc(buf, new_cap);
+          if (!tmp) {
+              free(buf);
+              cleanup_ssl(&ctx);
+              return false;
+          }
+          buf = tmp;
+          capacity = new_cap;
+      }
+
+      int r = mbedtls_ssl_read(&ctx.ssl, buf + total, capacity - total);
       if (r == MBEDTLS_ERR_SSL_WANT_READ || r == MBEDTLS_ERR_SSL_WANT_WRITE) {
           continue;
       }
@@ -211,23 +232,30 @@ bool net_download(const char *url, uint8_t **outBuf, size_t *outSize) {
       total += r;
 
       if (header_end == -1) {
+          // crude header parsing
           for (int i = 0; i < (int)total - 3; i++) {
               if (memcmp(buf + i, "\r\n\r\n", 4) == 0) {
                   header_end = i + 4;
+                  
+                  // try to find content length
+                  char *cl = strstr((char*)buf, "Content-Length: ");
+                  if (cl && cl < (char*)buf + i) {
+                      content_length = atoi(cl + 16);
+                      // optimize alloc if we know length
+                      if (content_length > 0) {
+                          size_t needed = header_end + content_length;
+                          if (needed > capacity) {
+                              uint8_t *tmp = realloc(buf, needed + 1);
+                              if (tmp) {
+                                  buf = tmp;
+                                  capacity = needed + 1;
+                              }
+                          }
+                      }
+                  }
                   break;
               }
           }
-      }
-
-      if (total >= capacity - 4096) {
-          capacity *= 2;
-          uint8_t *newBuf = realloc(buf, capacity);
-          if (!newBuf) {
-              free(buf);
-              cleanup_ssl(&ctx);
-              return false;
-          }
-          buf = newBuf;
       }
   }
 
@@ -235,6 +263,7 @@ bool net_download(const char *url, uint8_t **outBuf, size_t *outSize) {
 
   if (header_end != -1) {
       size_t bodySize = total - header_end;
+      // we alloc exact size for the final buffer to save RAM
       uint8_t *body = malloc(bodySize + 1);
       if (body) {
           memcpy(body, buf + header_end, bodySize);
