@@ -24,11 +24,27 @@ static int stream_read_cb(void *stream, unsigned char *ptr, int nbytes) {
             return copied;
     }
     
-    int ret = mbedtls_ssl_read(&s->ssl, ptr, nbytes);
-    if (ret == MBEDTLS_ERR_SSL_WANT_READ || ret == MBEDTLS_ERR_SSL_WANT_WRITE)
-        return copied;
+    while (1) {
+        int ret = mbedtls_ssl_read(&s->ssl, ptr, nbytes);
+        if (ret == MBEDTLS_ERR_SSL_WANT_READ || ret == MBEDTLS_ERR_SSL_WANT_WRITE) {
+            svcSleepThread(10 * 1000 * 1000); // 10ms wait
+            continue;
+        }
         
-    return (ret < 0) ? -1 : copied + ret;
+        if (ret < 0) return -1;
+        if (ret == 0) return copied; // EOF
+        
+        copied += ret;
+        ptr += ret;
+        nbytes -= ret;
+        
+        if (nbytes == 0) return copied;
+        // if we got partial data, we could return it, OR loop for more.
+        // opusfile prefers fuller reads usually, but returning what we have is strictly valid.
+        // However, blocking until full request or EOF is safer for stream stability if inconsistent packets come in.
+        // let's return what we have if we got > 0
+        return copied;
+    }
 }
 
 const OpusFileCallbacks STREAM_CALLBACKS = {

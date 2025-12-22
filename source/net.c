@@ -104,9 +104,7 @@ static uint8_t ws_send_buffer[WS_SEND_BUFFER_SIZE];
 static LightLock ws_send_lock;
 static bool ws_send_lock_initialized = false;
 
-void net_send_ws(SecureCtx *ctx, const char *text) {
-  size_t len = strlen(text);
-  
+void net_send_ws_frame(SecureCtx *ctx, int opcode, const uint8_t *data, size_t len) {
   // initialize lock on first use
   if (!ws_send_lock_initialized) {
     LightLock_Init(&ws_send_lock);
@@ -118,7 +116,7 @@ void net_send_ws(SecureCtx *ctx, const char *text) {
   uint8_t header[14]; // max header size
   int headLen = 0;
 
-  header[headLen++] = 0x81;
+  header[headLen++] = 0x80 | (opcode & 0x0F); // FIN | Opcode
   
   // masking is required for client -> server
   if (len < 126) {
@@ -148,11 +146,16 @@ void net_send_ws(SecureCtx *ctx, const char *text) {
 
   // static buffer
   memcpy(ws_send_buffer, header, headLen);
-  memcpy(ws_send_buffer + headLen, text, len);
+  if (data && len > 0)
+      memcpy(ws_send_buffer + headLen, data, len);
 
   mbedtls_ssl_write(&ctx->ssl, ws_send_buffer, totalLen);
   
   LightLock_Unlock(&ws_send_lock);
+}
+
+void net_send_ws(SecureCtx *ctx, const char *text) {
+    net_send_ws_frame(ctx, 0x1, (const uint8_t*)text, strlen(text));
 }
 
 bool net_download(const char *url, uint8_t **outBuf, size_t *outSize) {
@@ -224,6 +227,7 @@ bool net_download(const char *url, uint8_t **outBuf, size_t *outSize) {
 
       int r = mbedtls_ssl_read(&ctx.ssl, buf + total, capacity - total);
       if (r == MBEDTLS_ERR_SSL_WANT_READ || r == MBEDTLS_ERR_SSL_WANT_WRITE) {
+          svcSleepThread(10 * 1000 * 1000);
           continue;
       }
       if (r == MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY || r == 0) break;

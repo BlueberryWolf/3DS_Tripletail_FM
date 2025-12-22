@@ -261,7 +261,8 @@ void metadata_refresh(void) {
         } else if (opcode == 0x8) { // close
           goto disconnected;
         } else if (opcode == 0x9) { // ping
-          // reset title check to prove we are alive
+          // reply with pong (opcode 0xA)
+          net_send_ws_frame(&ctx, 0xA, p + head_len, payload_len);
         }
 
         buf_len -= total_len;

@@ -31,6 +31,7 @@ bool connect_ssl(SecureCtx *ctx, const char *host, const char *port);
 void cleanup_ssl(SecureCtx *ctx);
 int read_exact(SecureCtx *ctx, uint8_t *buf, int len);
 void net_send_ws(SecureCtx *ctx, const char *text);
+void net_send_ws_frame(SecureCtx *ctx, int opcode, const uint8_t *data, size_t len);
 
 // buffer is null-terminated (size+1) just in case it's text, but outSize is actual data size
 bool net_download(const char *url, uint8_t **outBuf, size_t *outSize);
