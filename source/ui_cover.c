@@ -8,12 +8,13 @@
 #include <3ds.h>
 #include <citro2d.h>
 
-// Image layout constants match C2D_Image
+// image layout constants match C2D_Image
 
 static Thread coverThread;
 static volatile bool cover_quit = false;
 
-static C3D_Tex coverTex;
+static C2D_SpriteSheet coverSheet;
+static C2D_Image coverImg;
 static bool hasCover = false;
 static char lastArtUrl[256] = {0};
 
@@ -44,26 +45,9 @@ static void cover_worker(void *arg) {
             if (net_download(fullUrl, &data, &size)) {
                 snprintf(lastArtUrl, sizeof(lastArtUrl), "%s", currentUrl); // update last url
                 
-                if (size == 128 * 128 * 3) {
-                    u8 *rgba = malloc(128 * 128 * 4);
-                    if (rgba) {
-                        for (int i = 0; i < 128 * 128; i++) {
-                            rgba[i * 4 + 0] = 0xFF;            // A
-                            rgba[i * 4 + 3] = data[i * 3 + 2]; // R
-                            rgba[i * 4 + 2] = data[i * 3 + 1]; // G
-                            rgba[i * 4 + 1] = data[i * 3 + 0]; // B
-                        }
-                        free(data);
-                        data = rgba;
-                        size = 128 * 128 * 4;
-                    } else {
-                        free(data);
-                        data = NULL;
-                    }
-                }
-
-                if (data && size == 128 * 128 * 4) {
-                    UI_Cover_Update(data, 128, 128);
+                // backend returns a valid .t3x file
+                if (data && size > 16) { 
+                    UI_Cover_Update(data, size, 0); 
                 } else {
                     if (data) free(data);
                 }
@@ -78,7 +62,7 @@ static void cover_worker(void *arg) {
 
 // global handoff
 static uint8_t *pendingData = NULL;
-static u32 pendingW = 0, pendingH = 0;
+static u32 pendingW = 0;
 static LightLock pendingLock;
 
 #define COVER_DMA_BUFFER_SIZE (128 * 128 * 4)
@@ -89,7 +73,7 @@ void UI_Cover_Init(void) {
     // pre-allocate dma buffer for texture uploads
     coverDmaBuffer = linearAlloc(COVER_DMA_BUFFER_SIZE);
     
-    C3D_TexInit(&coverTex, 128, 128, GPU_RGBA8); 
+    coverSheet = NULL; 
     
     cover_quit = false;
     coverThread = threadCreate(cover_worker, NULL, COVER_STACK_SIZE, THREAD_PRIO_COVER, -1, false);
@@ -98,19 +82,18 @@ void UI_Cover_Init(void) {
 void UI_Cover_Exit(void) {
     cover_quit = true;
     threadJoin(coverThread, UINT64_MAX);
-    C3D_TexDelete(&coverTex);
+    if (coverSheet) C2D_SpriteSheetFree(coverSheet);
     
     if (pendingData) free(pendingData);
     if (coverDmaBuffer) linearFree(coverDmaBuffer);
 }
 
 // called from worker thread
-void UI_Cover_Update(u8 *artData, u32 width, u32 height) {
+void UI_Cover_Update(u8 *artData, u32 size, u32 height_unused) {
     LightLock_Lock(&pendingLock);
     if (pendingData) free(pendingData);
     pendingData = artData;
-    pendingW = width;
-    pendingH = height;
+    pendingW = size; // hack: passing size in width param
     LightLock_Unlock(&pendingLock);
 }
 
@@ -119,31 +102,19 @@ void UI_Cover_CheckBuffers(void) {
     // check for pending updates
     if (LightLock_TryLock(&pendingLock) == 0) {
         if (pendingData) {
-
-            size_t reqSize = 128 * 128 * 4;
             
-            if (coverDmaBuffer) {
-                memcpy(coverDmaBuffer, pendingData, reqSize);
-                
-                GSPGPU_FlushDataCache(coverDmaBuffer, reqSize);
-                
-                // rgba8 linear -> rgba8 tiled
-                u32 flags = (GX_TRANSFER_FLIP_VERT(0) | GX_TRANSFER_OUT_TILED(1) | 
-                             GX_TRANSFER_RAW_COPY(0) | 
-                             GX_TRANSFER_IN_FORMAT(GX_TRANSFER_FMT_RGBA8) | 
-                             GX_TRANSFER_OUT_FORMAT(GX_TRANSFER_FMT_RGBA8) | 
-                             GX_TRANSFER_SCALING(GX_TRANSFER_SCALE_NO));
-
-                GX_DisplayTransfer((u32*)osConvertVirtToPhys(coverDmaBuffer), 
-                                   GX_BUFFER_DIM(128, 128),
-                                   (u32*)osConvertVirtToPhys(coverTex.data), 
-                                   GX_BUFFER_DIM(128, 128), 
-                                   flags);
-                
-                // flush the texture data after transfer so the GPU sees it
-                gspWaitForPPF(); // wait for transfer to finish
-                GSPGPU_FlushDataCache(coverTex.data, coverTex.size);
-
+            // release old sheet
+            if (coverSheet) {
+                C2D_SpriteSheetFree(coverSheet);
+                coverSheet = NULL;
+                hasCover = false;
+            }
+            
+            // load new sheet from .t3x data
+            coverSheet = C2D_SpriteSheetLoadFromMem(pendingData, pendingW);
+            
+            if (coverSheet) {
+                coverImg = C2D_SpriteSheetGetImage(coverSheet, 0);
                 hasCover = true;
             }
             
@@ -156,16 +127,13 @@ void UI_Cover_CheckBuffers(void) {
 
 // called from main render loop
 void UI_Cover_Draw(float x, float y, float w, float h) {
-    if (hasCover) {
-        static const Tex3DS_SubTexture subtex = {
-            .width = 128, .height = 128,
-            .left = 0.0f, .top = 1.0f, .right = 1.0f, .bottom = 0.0f 
-        };
+    if (hasCover && coverSheet) {
+        float imgW = coverImg.subtex->width;
+        float imgH = coverImg.subtex->height;
         
-        float scaleX = w / 128.0f;
-        float scaleY = h / 128.0f;
+        float scaleX = w / imgW;
+        float scaleY = h / imgH;
 
-        C2D_Image image = { .tex = &coverTex, .subtex = &subtex };
-        C2D_DrawImageAt(image, x, y, 0.5f, NULL, scaleX, scaleY);
+        C2D_DrawImageAt(coverImg, x, y, 0.5f, NULL, scaleX, scaleY);
     }
 }
