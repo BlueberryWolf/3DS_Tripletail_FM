@@ -57,3 +57,5 @@ dkms.conf
 *.3dsx
 *.smdh
 build/
+
+*.zip
