@@ -119,11 +119,7 @@ void UI_Cover_CheckBuffers(void) {
     // check for pending updates
     if (LightLock_TryLock(&pendingLock) == 0) {
         if (pendingData) {
-            C3D_TexDelete(&coverTex);
-            
-            // 128x128 is POT (nice)
-            C3D_TexInit(&coverTex, 128, 128, GPU_RGBA8);
-            
+
             size_t reqSize = 128 * 128 * 4;
             
             if (coverDmaBuffer) {
