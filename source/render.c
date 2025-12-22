@@ -30,7 +30,9 @@ void render_exit(void) {
   C3D_Fini();
 }
 
+
 void render_chat(void) {
+  UI_Cover_CheckBuffers();
   C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
 
   Text_BeginFrame();

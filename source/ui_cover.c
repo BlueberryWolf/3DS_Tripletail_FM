@@ -44,7 +44,29 @@ static void cover_worker(void *arg) {
             if (net_download(fullUrl, &data, &size)) {
                 snprintf(lastArtUrl, sizeof(lastArtUrl), "%s", currentUrl); // update last url
                 
-                UI_Cover_Update(data, 128, 128); // 128x128 update
+                if (size == 128 * 128 * 3) {
+                    u8 *rgba = malloc(128 * 128 * 4);
+                    if (rgba) {
+                        for (int i = 0; i < 128 * 128; i++) {
+                            rgba[i * 4 + 0] = 0xFF;            // A
+                            rgba[i * 4 + 3] = data[i * 3 + 2]; // R
+                            rgba[i * 4 + 2] = data[i * 3 + 1]; // G
+                            rgba[i * 4 + 1] = data[i * 3 + 0]; // B
+                        }
+                        free(data);
+                        data = rgba;
+                        size = 128 * 128 * 4;
+                    } else {
+                        free(data);
+                        data = NULL;
+                    }
+                }
+
+                if (data && size == 128 * 128 * 4) {
+                    UI_Cover_Update(data, 128, 128);
+                } else {
+                    if (data) free(data);
+                }
             } else {
                 // retry backoff implicitly handled by loop sleep
             }
@@ -59,7 +81,7 @@ static uint8_t *pendingData = NULL;
 static u32 pendingW = 0, pendingH = 0;
 static LightLock pendingLock;
 
-#define COVER_DMA_BUFFER_SIZE (128 * 128 * 3)
+#define COVER_DMA_BUFFER_SIZE (128 * 128 * 4)
 static u8 *coverDmaBuffer = NULL;
 
 void UI_Cover_Init(void) {
@@ -67,7 +89,7 @@ void UI_Cover_Init(void) {
     // pre-allocate dma buffer for texture uploads
     coverDmaBuffer = linearAlloc(COVER_DMA_BUFFER_SIZE);
     
-    C3D_TexInit(&coverTex, 64, 64, GPU_RGB8); 
+    C3D_TexInit(&coverTex, 128, 128, GPU_RGBA8); 
     
     cover_quit = false;
     coverThread = threadCreate(cover_worker, NULL, COVER_STACK_SIZE, THREAD_PRIO_COVER, -1, false);
@@ -92,28 +114,28 @@ void UI_Cover_Update(u8 *artData, u32 width, u32 height) {
     LightLock_Unlock(&pendingLock);
 }
 
-// called from main render loop
-void UI_Cover_Draw(float x, float y, float w, float h) {
+// called from render loop before frame begin
+void UI_Cover_CheckBuffers(void) {
     // check for pending updates
     if (LightLock_TryLock(&pendingLock) == 0) {
         if (pendingData) {
             C3D_TexDelete(&coverTex);
             
             // 128x128 is POT (nice)
-            C3D_TexInit(&coverTex, 128, 128, GPU_RGB8);
+            C3D_TexInit(&coverTex, 128, 128, GPU_RGBA8);
             
-            size_t reqSize = 128 * 128 * 3;
+            size_t reqSize = 128 * 128 * 4;
             
             if (coverDmaBuffer) {
                 memcpy(coverDmaBuffer, pendingData, reqSize);
                 
                 GSPGPU_FlushDataCache(coverDmaBuffer, reqSize);
                 
-                // rgb8 linear -> rgb8 tiled
+                // rgba8 linear -> rgba8 tiled
                 u32 flags = (GX_TRANSFER_FLIP_VERT(0) | GX_TRANSFER_OUT_TILED(1) | 
                              GX_TRANSFER_RAW_COPY(0) | 
-                             GX_TRANSFER_IN_FORMAT(GX_TRANSFER_FMT_RGB8) | 
-                             GX_TRANSFER_OUT_FORMAT(GX_TRANSFER_FMT_RGB8) | 
+                             GX_TRANSFER_IN_FORMAT(GX_TRANSFER_FMT_RGBA8) | 
+                             GX_TRANSFER_OUT_FORMAT(GX_TRANSFER_FMT_RGBA8) | 
                              GX_TRANSFER_SCALING(GX_TRANSFER_SCALE_NO));
 
                 GX_DisplayTransfer((u32*)osConvertVirtToPhys(coverDmaBuffer), 
@@ -122,6 +144,10 @@ void UI_Cover_Draw(float x, float y, float w, float h) {
                                    GX_BUFFER_DIM(128, 128), 
                                    flags);
                 
+                // flush the texture data after transfer so the GPU sees it
+                gspWaitForPPF(); // wait for transfer to finish
+                GSPGPU_FlushDataCache(coverTex.data, coverTex.size);
+
                 hasCover = true;
             }
             
@@ -130,7 +156,10 @@ void UI_Cover_Draw(float x, float y, float w, float h) {
         }
         LightLock_Unlock(&pendingLock);
     }
+}
 
+// called from main render loop
+void UI_Cover_Draw(float x, float y, float w, float h) {
     if (hasCover) {
         static const Tex3DS_SubTexture subtex = {
             .width = 128, .height = 128,
