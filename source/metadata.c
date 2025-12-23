@@ -2,6 +2,7 @@
 #define JSMN_STATIC
 #include "jsmn.h"
 #include "net.h"
+#include "common.h"
 #include <3ds.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -167,6 +168,8 @@ void metadata_refresh(void) {
     return;
   }
 
+  mbedtls_net_set_nonblock(&ctx.fd);
+
   strncpy(current_metadata.title, "Handshaking...",
           sizeof(current_metadata.title));
 
@@ -191,9 +194,13 @@ void metadata_refresh(void) {
   int received = 0;
   int header_end = -1;
 
-  while (received < buf_cap - 1) {
+  while ((size_t)received < buf_cap - 1) {
     int r = mbedtls_ssl_read(&ctx.ssl, (unsigned char *)buf + received,
                              buf_cap - 1 - received);
+    if (r == MBEDTLS_ERR_SSL_WANT_READ || r == MBEDTLS_ERR_SSL_WANT_WRITE) {
+        svcSleepThread(10 * 1000 * 1000); // 10ms for handshake
+        continue;
+    }
     if (r <= 0)
       break;
     received += r;
@@ -234,6 +241,8 @@ void metadata_refresh(void) {
           sizeof(current_metadata.title));
 
   while (1) {
+    if (!s_enable_metadata) goto disconnected;
+
     while (buf_len >= 2) {
       unsigned char *p = (unsigned char *)buf;
       int opcode = p[0] & 0x0F;
@@ -273,7 +282,7 @@ void metadata_refresh(void) {
       }
     }
 
-    if (buf_len >= buf_cap - 1) {
+    if ((size_t)buf_len >= buf_cap - 1) {
       // buffer full, fatal
       goto disconnected;
     }
@@ -281,7 +290,7 @@ void metadata_refresh(void) {
     int r = mbedtls_ssl_read(&ctx.ssl, (unsigned char *)buf + buf_len,
                              buf_cap - 1 - buf_len);
     if (r == MBEDTLS_ERR_SSL_WANT_READ || r == MBEDTLS_ERR_SSL_WANT_WRITE) {
-      svcSleepThread(10 * 1000 * 1000); // 10ms
+      svcSleepThread(100 * 1000 * 1000); // 100ms polling for metadata is plenty
       continue;
     }
     if (r <= 0)
@@ -295,4 +304,5 @@ disconnected:
           sizeof(current_metadata.title));
   free(buf);
   cleanup_ssl(&ctx);
+  svcSleepThread(1000 * 1000 * 1000); // wait 1s before allowing potential reconnect
 }

@@ -16,13 +16,22 @@
 
 // global state
 volatile bool s_quit = false;
+volatile bool s_enable_chat = true;
+volatile bool s_enable_cover = true;
+volatile bool s_enable_metadata = true;
+
 static const char *STREAM_URL = "https://radio.blueberry.coffee/3ds.ogg";
 
 // threads
 static void metadata_thread_func(void *arg) {
+    (void)arg;
     while (!s_quit) {
-        metadata_refresh();
-        svcSleepThread(METADATA_REFRESH_INTERVAL_NS);
+        if (s_enable_metadata) {
+            metadata_refresh();
+            svcSleepThread(METADATA_REFRESH_INTERVAL_NS);
+        } else {
+             svcSleepThread(500 * 1000 * 1000); // 500ms check
+        }
     }
 }
 
@@ -35,12 +44,21 @@ int main(void) {
     chat_init();
 
     // audio/stream
-    SecureCtx ctx;
-    if (stream_connect(&ctx, STREAM_URL)) {
-        OggOpusFile *of = op_open_callbacks(&ctx, &STREAM_CALLBACKS, NULL, 0, NULL);
+    StreamQueue streamQ;
+    SecureCtx streamNetCtx = {0}; // alloc on stack, used by worker
+    
+    if (stream_queue_init(&streamQ, STREAM_BUF_SIZE)) {
+        streamQ.net = &streamNetCtx;
+        streamQ.url = STREAM_URL;
+        
+        // start background download thread
+        Thread streamTh = threadCreate(stream_download_thread, &streamQ, STREAM_STACK_SIZE, THREAD_PRIO_STREAM, -1, false);
+        
+        // blocks until enough data is buffered to read headers
+        OggOpusFile *of = op_open_callbacks(&streamQ, &STREAM_CALLBACKS, NULL, 0, NULL);
+        
         if (of) {
             if (audio_init()) {
-                // threads
                 // threads
                 Thread decoderTh = threadCreate(audio_decoder_thread, of, DECODER_STACK_SIZE, THREAD_PRIO_DECODER, -1, false);
                 Thread audioTh = threadCreate(audio_thread, NULL, AUDIO_STACK_SIZE, THREAD_PRIO_AUDIO, -1, false);
@@ -95,22 +113,29 @@ int main(void) {
 
                 // cleanup
                 s_quit = true;
+                streamQ.quit = true; // signal stream explicitly
                 
                 // signal audio thread to wake up and see exit flag
                 audio_signal_exit();
                 
+                LightEvent_Signal(&streamQ.canRead);
+                LightEvent_Signal(&streamQ.canWrite);
+                
                 threadJoin(decoderTh, UINT64_MAX);
                 threadJoin(audioTh, UINT64_MAX);
                 threadJoin(chatTh, UINT64_MAX);
+                threadJoin(streamTh, UINT64_MAX);
                 // metaTh is detached
 
                 audio_exit(); // ndsp exit
             }
             op_free(of);
         }
+        
+        stream_queue_free(&streamQ);
     }
 
-    cleanup_ssl(&ctx);
+    cleanup_ssl(&streamNetCtx);
     net_exit();
     render_exit();
     gfxExit();

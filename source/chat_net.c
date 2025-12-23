@@ -26,6 +26,15 @@ void chat_net_thread(void *arg) {
         return;
 
     while (!s_quit) {
+        if (!s_enable_chat) {
+             if (chat_store.isConnected) {
+                 cleanup_ssl(&ctx);
+                 chat_store.isConnected = false;
+             }
+             svcSleepThread(500 * 1000 * 1000);
+             continue;
+        }
+
         chat_store.isConnected = false;
         // connect
         if (!connect_ssl(&ctx, CHAT_HOST, "443")) {
@@ -90,6 +99,8 @@ void chat_net_thread(void *arg) {
 
         // message loop
         while (!s_quit && chat_store.isConnected) {
+            if (!s_enable_chat) break;
+
             if (osGetTime() - last_tick > 1000) {
                 chat_clean_typers();
                 last_tick = osGetTime();

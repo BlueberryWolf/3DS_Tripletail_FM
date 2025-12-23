@@ -52,7 +52,7 @@ bool connect_ssl(SecureCtx *ctx, const char *host, const char *port) {
 
   int handshake_ret;
   int retry_count = 0;
-  const int MAX_HANDSHAKE_RETRIES = 50;
+  const int MAX_HANDSHAKE_RETRIES = 500; // 5 seconds timeout
 
   while ((handshake_ret = mbedtls_ssl_handshake(&ctx->ssl)) != 0) {
     if (handshake_ret != MBEDTLS_ERR_SSL_WANT_READ &&
@@ -73,7 +73,7 @@ bool connect_ssl(SecureCtx *ctx, const char *host, const char *port) {
 }
 
 void cleanup_ssl(SecureCtx *ctx) {
-  mbedtls_net_free(&ctx->fd);
+  if (ctx->fd.fd != -1) mbedtls_net_free(&ctx->fd); // check fd before free
   mbedtls_ssl_free(&ctx->ssl);
   mbedtls_ssl_config_free(&ctx->conf);
   mbedtls_ctr_drbg_free(&ctx->ctr_drbg);
@@ -149,7 +149,23 @@ void net_send_ws_frame(SecureCtx *ctx, int opcode, const uint8_t *data, size_t l
   if (data && len > 0)
       memcpy(ws_send_buffer + headLen, data, len);
 
-  mbedtls_ssl_write(&ctx->ssl, ws_send_buffer, totalLen);
+  // send loop handling WANT_WRITE
+  size_t sent = 0;
+  while (sent < totalLen) {
+      int ret = mbedtls_ssl_write(&ctx->ssl, ws_send_buffer + sent, totalLen - sent);
+      
+      if (ret == MBEDTLS_ERR_SSL_WANT_READ || ret == MBEDTLS_ERR_SSL_WANT_WRITE) {
+          svcSleepThread(5 * 1000 * 1000); // 5ms wait
+          continue;
+      }
+      
+      if (ret < 0) {
+          // error occurred
+          break;
+      }
+      
+      sent += ret;
+  }
   
   LightLock_Unlock(&ws_send_lock);
 }
@@ -227,7 +243,6 @@ bool net_download(const char *url, uint8_t **outBuf, size_t *outSize) {
 
       int r = mbedtls_ssl_read(&ctx.ssl, buf + total, capacity - total);
       if (r == MBEDTLS_ERR_SSL_WANT_READ || r == MBEDTLS_ERR_SSL_WANT_WRITE) {
-          svcSleepThread(10 * 1000 * 1000);
           continue;
       }
       if (r == MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY || r == 0) break;
@@ -240,6 +255,23 @@ bool net_download(const char *url, uint8_t **outBuf, size_t *outSize) {
           for (int i = 0; i < (int)total - 3; i++) {
               if (memcmp(buf + i, "\r\n\r\n", 4) == 0) {
                   header_end = i + 4;
+                  
+                  // validate HTTP 200 OK
+                  bool statusOk = false;
+                  // check first line roughly
+                  for(int k=0; k<i && k<128; k++) {
+                      if (buf[k] == '\r' || buf[k] == '\n') break;
+                      if (k > 0 && buf[k] == '2' && buf[k+1] == '0' && buf[k+2] == '0') {
+                          statusOk = true;
+                          break;
+                      }
+                  }
+                  
+                  if (!statusOk) {
+                      free(buf);
+                      cleanup_ssl(&ctx);
+                      return false;
+                  }
                   
                   // try to find content length
                   char *cl = strstr((char*)buf, "Content-Length: ");

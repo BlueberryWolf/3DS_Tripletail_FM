@@ -27,6 +27,11 @@ static const char *PROXY_BASE = "https://tripletail-socket.blueberry.coffee/api/
 
 static void cover_worker(void *arg) {
     while (!cover_quit && !s_quit) {
+        if (!s_enable_cover) {
+            svcSleepThread(500 * 1000 * 1000);
+            continue;
+        }
+
         // check if art url changed
         char currentUrl[256];
         bool changed = false;
@@ -39,6 +44,8 @@ static void cover_worker(void *arg) {
         }
 
         if (changed) {
+            // mark as tried immediately to prevent infinite retry loops on failure
+            snprintf(lastArtUrl, sizeof(lastArtUrl), "%s", currentUrl);
             
             char fullUrl[1024];
             snprintf(fullUrl, sizeof(fullUrl), "%s%s", PROXY_BASE, currentUrl);
@@ -47,8 +54,6 @@ static void cover_worker(void *arg) {
             size_t size = 0;
             
             if (net_download(fullUrl, &data, &size)) {
-                snprintf(lastArtUrl, sizeof(lastArtUrl), "%s", currentUrl); // update last url
-                
                 // backend returns a valid .t3x file
                 if (data && size > 16) { 
                     UI_Cover_Update(data, size, 0); 
@@ -56,7 +61,7 @@ static void cover_worker(void *arg) {
                     if (data) free(data);
                 }
             } else {
-                // retry backoff implicitly handled by loop sleep
+                // download failed. we will not retry until url changes.
             }
         }
 
