@@ -1,4 +1,5 @@
 #pragma once
+#include <3ds.h>
 
 typedef struct {
   char title[128];
@@ -11,3 +12,5 @@ extern Metadata current_metadata;
 
 void metadata_init(void);
 void metadata_refresh(void);
+
+extern LightEvent g_metadata_event;

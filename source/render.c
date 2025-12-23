@@ -27,6 +27,7 @@ void render_init(void) {
 
 void render_exit(void) {
   UI_Cover_Exit();
+  UI_Chat_Exit();
   UI_Osciloscope_Exit();
   Text_Exit();
   C2D_Fini();

@@ -12,6 +12,13 @@ void UI_Chat_Init(void) {
     g_msg_parsed_count = 0;
 }
 
+void UI_Chat_Exit(void) {
+    if (g_chatBuf) {
+        C2D_TextBufDelete(g_chatBuf);
+        g_chatBuf = NULL;
+    }
+}
+
 static void RecacheAll(void) {
     C2D_TextBufClear(g_chatBuf);
     for (int i = 0; i < chat_store.count; i++) {
@@ -21,6 +28,8 @@ static void RecacheAll(void) {
 }
 
 void UI_Chat_Draw(float x, float y, float w, float h) {
+  (void)x;
+  (void)w;
   float currentY = y + h - 20;
   float scale = 0.5f;
   float lineHeight = 16.0f;

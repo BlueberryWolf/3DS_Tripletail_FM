@@ -26,6 +26,7 @@ static C2D_Font g_font;
 static const char *PROXY_BASE = "https://tripletail-socket.blueberry.coffee/api/convert-image?url=";
 
 static void cover_worker(void *arg) {
+    (void)arg;
     while (!cover_quit && !s_quit) {
         if (!s_enable_cover) {
             svcSleepThread(500 * 1000 * 1000);
@@ -65,7 +66,7 @@ static void cover_worker(void *arg) {
             }
         }
 
-        svcSleepThread(COVER_CHECK_INTERVAL_NS);
+        LightEvent_Wait(&g_metadata_event);
     }
 }
 
@@ -93,6 +94,7 @@ void UI_Cover_Init(void) {
 
 void UI_Cover_Exit(void) {
     cover_quit = true;
+    LightEvent_Signal(&g_metadata_event); // wake up thread so it can exit
     threadJoin(coverThread, UINT64_MAX);
     if (coverSheet) C2D_SpriteSheetFree(coverSheet);
     
@@ -105,6 +107,7 @@ void UI_Cover_Exit(void) {
 
 // called from worker thread
 void UI_Cover_Update(u8 *artData, u32 size, u32 height_unused) {
+    (void)height_unused;
     LightLock_Lock(&pendingLock);
     if (pendingData) free(pendingData);
     pendingData = artData;

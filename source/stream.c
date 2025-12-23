@@ -57,7 +57,7 @@ static int stream_queue_read(void *user_data, unsigned char *ptr, int nbytes) {
         
         // read chunk
         size_t available = q->count;
-        size_t chunk = (available > nbytes) ? nbytes : available;
+        size_t chunk = (available > (size_t)nbytes) ? (size_t)nbytes : available;
         
         // handle wrap around
         size_t first_part = q->capacity - q->tail;

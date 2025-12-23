@@ -43,6 +43,7 @@ int main(void) {
     osSetSpeedupEnable(true);
     net_init();
     chat_init();
+    metadata_init();
     settings_init();
     
     // register username variable (chat_store.username is in chat.h)
@@ -71,7 +72,7 @@ int main(void) {
                 Thread decoderTh = threadCreate(audio_decoder_thread, of, DECODER_STACK_SIZE, THREAD_PRIO_DECODER, -1, false);
                 Thread audioTh = threadCreate(audio_thread, NULL, AUDIO_STACK_SIZE, THREAD_PRIO_AUDIO, -1, false);
                 Thread chatTh = threadCreate(chat_net_thread, NULL, CHAT_STACK_SIZE, THREAD_PRIO_CHAT, -1, false);
-                threadCreate(metadata_thread_func, NULL, METADATA_STACK_SIZE, THREAD_PRIO_METADATA, -1, true); // detached
+                Thread metaTh = threadCreate(metadata_thread_func, NULL, METADATA_STACK_SIZE, THREAD_PRIO_METADATA, -1, false);
 
                 // main loop
                 static char swkbd_buf[256];
@@ -134,7 +135,7 @@ int main(void) {
                 threadJoin(audioTh, UINT64_MAX);
                 threadJoin(chatTh, UINT64_MAX);
                 threadJoin(streamTh, UINT64_MAX);
-                // metaTh is detached
+                threadJoin(metaTh, UINT64_MAX);
 
                 audio_exit(); // ndsp exit
             }
@@ -145,6 +146,7 @@ int main(void) {
     }
 
     cleanup_ssl(&streamNetCtx);
+    chat_exit();
     net_exit();
     render_exit();
     gfxExit();

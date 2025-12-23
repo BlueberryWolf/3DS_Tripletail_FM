@@ -107,6 +107,7 @@ static size_t rb_get_space(void) {
 }
 
 static void ndsp_cb(void *u) {
+    (void)u;
     LightEvent_Signal(&s_event);
 }
 

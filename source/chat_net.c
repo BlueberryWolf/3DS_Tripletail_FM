@@ -16,6 +16,7 @@
 #define CHAT_MAX_BUF_SIZE (128 * 1024)     // 128 KB maximum
 
 void chat_net_thread(void *arg) {
+    (void)arg;
     SecureCtx ctx;
     chat_store.netCtx = &ctx;
 

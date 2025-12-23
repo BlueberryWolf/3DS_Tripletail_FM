@@ -61,6 +61,7 @@ extern ChatStore chat_store;
 extern LightLock chat_lock;
 
 void chat_init(void);
+void chat_exit(void);
 void chat_process_packet(char *json_payload, size_t len);
 
 void chat_set_username(const char *name);

@@ -153,7 +153,14 @@ static void parse_meta_json(const char *json, size_t len) {
     strncpy(current_metadata.title, title, sizeof(current_metadata.title));
     strncpy(current_metadata.artist, artist, sizeof(current_metadata.artist));
     strncpy(current_metadata.art, art, sizeof(current_metadata.art));
+    LightEvent_Signal(&g_metadata_event);
   }
+}
+
+LightEvent g_metadata_event;
+
+void metadata_init(void) {
+    LightEvent_Init(&g_metadata_event, RESET_ONESHOT);
 }
 
 void metadata_refresh(void) {
@@ -241,7 +248,7 @@ void metadata_refresh(void) {
           sizeof(current_metadata.title));
 
   while (1) {
-    if (!s_enable_metadata) goto disconnected;
+    if (!s_enable_metadata || s_quit) goto disconnected;
 
     while (buf_len >= 2) {
       unsigned char *p = (unsigned char *)buf;

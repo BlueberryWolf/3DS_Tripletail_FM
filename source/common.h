@@ -16,8 +16,8 @@ extern volatile bool s_enable_metadata;
 
 #define THREAD_PRIO_STREAM 0x26   // below decoder, above main
 #define THREAD_PRIO_COVER 0x27    // just below stream, above main
+#define THREAD_PRIO_METADATA 0x28 // important for cover art
 #define THREAD_PRIO_CHAT 0x31     // lower than main
-#define THREAD_PRIO_METADATA 0x32 // lowest
 
 #define RENDER_FPS_CAP 60
 

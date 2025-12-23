@@ -265,6 +265,7 @@ static int skip_value(jsmntok_t *tokens, int current, int num_tokens) {
 
 static void handle_chat_message(const char *json, jsmntok_t *tokens,
                                 int obj_idx, int num_tokens, bool live) {
+  (void)live;
   ChatMessage m = {0};
   int num_fields = tokens[obj_idx].size;
   int current = obj_idx + 1;
@@ -464,9 +465,17 @@ static void handle_message_deleted(const char *json, jsmntok_t *t, int idx,
   }
 }
 
+static jsmntok_t *tokens = NULL;
+
+void chat_exit(void) {
+    if (tokens) {
+        free(tokens);
+        tokens = NULL;
+    }
+}
+
 void chat_process_packet(char *json_payload, size_t len) {
   // token buffer for json parsing
-  static jsmntok_t *tokens = NULL;
   if (!tokens)
     tokens = malloc(sizeof(jsmntok_t) * MAX_JSON_TOKENS);
   if (!tokens)

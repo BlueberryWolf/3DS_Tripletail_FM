@@ -7,6 +7,8 @@ void UI_Player_Init(void) {
 }
 
 void UI_Player_Draw(float x, float y, float w, float h) {
+  (void)w;
+  (void)h;
   // static ids for ui elements
   // 0xF0000000 + offsets
   const size_t ID_TITLE = 0xF0000001;
