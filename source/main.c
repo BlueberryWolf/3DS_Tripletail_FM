@@ -12,6 +12,7 @@
 #include "metadata.h"
 #include "net.h"
 #include "render.h"
+#include "settings.h"
 #include "stream.h"
 
 // global state
@@ -42,6 +43,13 @@ int main(void) {
     osSetSpeedupEnable(true);
     net_init();
     chat_init();
+    settings_init();
+    
+    // register username variable (chat_store.username is in chat.h)
+    settings_register_string("username", chat_store.username, sizeof(chat_store.username));
+    
+    // settings_load overwrites the default username set in chat_init()
+    settings_load();
 
     // audio/stream
     StreamQueue streamQ;
@@ -83,6 +91,7 @@ int main(void) {
                         swkbdSetInitialText(&swkbd, chat_store.username);
                         if (swkbdInputText(&swkbd, swkbd_buf, sizeof(swkbd_buf)) == SWKBD_BUTTON_CONFIRM) {
                             chat_set_username(swkbd_buf);
+                            settings_save(); // manually save since the registered variable was modified
                         }
                     }
 

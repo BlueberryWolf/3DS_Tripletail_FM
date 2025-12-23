@@ -17,7 +17,6 @@
 
 void chat_net_thread(void *arg) {
     SecureCtx ctx;
-    chat_init();
     chat_store.netCtx = &ctx;
 
     size_t bufCap = CHAT_INITIAL_BUF_SIZE;

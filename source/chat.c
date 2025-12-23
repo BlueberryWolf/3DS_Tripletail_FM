@@ -153,7 +153,7 @@ void chat_init(void) {
   memset(&chat_store, 0, sizeof(ChatStore));
   LightLock_Init(&chat_lock);
   srand(time(NULL));
-  snprintf(chat_store.username, 32, "Floofer%d", rand() % 1000);
+  snprintf(chat_store.username, 32, "Floofer%03d", rand() % 1000);
 }
 
 
