@@ -1,0 +1,10 @@
+asedOnStyle: LLVM
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+BreakBeforeBraces: Attach
+AllowShortFunctionsOnASingleLine: false
+ColumnLimit: 80
+AlignConsecutiveAssignments: true
+SortIncludes: true
+SpaceAfterCStyleCast: true

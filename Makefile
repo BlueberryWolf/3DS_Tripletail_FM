@@ -17,8 +17,8 @@ include $(DEVKITARM)/3ds_rules
 # INCLUDES is a list of directories containing header files
 # GRAPHICS is a list of directories containing graphics files
 # GFXBUILD is the directory where converted graphics files will be placed
-#   If set to $(BUILD), it will statically link in the converted
-#   files as if they were data files.
+#	If set to $(BUILD), it will statically link in the converted
+#	files as if they were data files.
 #
 # NO_SMDH: if set to anything, no SMDH file is generated.
 # ROMFS is the directory which contains the RomFS, relative to the Makefile (Optional)
@@ -26,22 +26,24 @@ include $(DEVKITARM)/3ds_rules
 # APP_DESCRIPTION is the description of the app stored in the SMDH file (Optional)
 # APP_AUTHOR is the author of the app stored in the SMDH file (Optional)
 # ICON is the filename of the icon (.png), relative to the project folder.
-#   If not set, it attempts to use one of the following (in this order):
-#     - <Project name>.png
-#     - icon.png
-#     - <libctru folder>/default_icon.png
+#	If not set, it attempts to use one of the following (in this order):
+#	  - <Project name>.png
+#	  - icon.png
+#	  - <libctru folder>/default_icon.png
 #---------------------------------------------------------------------------------
 #---------------------------------------------------------------------------------
-TARGET		:=	3DS_Tripletail_FM
-APP_TITLE	:=	Tripletail FM
-APP_DESCRIPTION	:=	Radio Player for Tripletail FM
-APP_AUTHOR	:=	BlueberryWolf
-BUILD		:=	build
-SOURCES		:=	source lib/kissfft
-DATA		:=	data
-INCLUDES	:=	include lib/kissfft
-GRAPHICS	:=	gfx
-GFXBUILD	:=	$(BUILD)
+TARGET			:= 3DS_Tripletail_FM
+APP_TITLE		:= Tripletail FM
+APP_DESCRIPTION := Radio Player for Tripletail FM
+APP_AUTHOR		:= BlueberryWolf
+BUILD			:= build
+RecursiveDirs	:= $(1) $(foreach d,$(wildcard $(1)*/),$(call RecursiveDirs,$(d)))
+SOURCES			:= $(patsubst %/,%,$(call RecursiveDirs,source))
+SOURCES			:= source lib/kissfft
+DATA			:= data
+INCLUDES		:= include lib/kissfft
+GRAPHICS		:= gfx
+GFXBUILD		:= $(BUILD)
 #ROMFS		:=	romfs
 #GFXBUILD	:=	$(ROMFS)/gfx
 
@@ -52,13 +54,13 @@ ARCH	:=	-march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
 
 # NOTE ffast-math might fuck some stuff up???
 
-CFLAGS  :=  -g -Wall -Wextra -Wshadow -Wimplicit -O2 -mword-relocations \
-            -fno-math-errno -f--ffast-math \
-            -ffunction-sections \
-            -std=c99 \
-            $(ARCH)
+CFLAGS	:=	-g -Wall -Wextra -Wshadow -Wimplicit -O2 -mword-relocations \
+			-fno-math-errno -ffast-math \
+			-ffunction-sections \
+			-std=c99 \
+			$(ARCH)
 
-CFLAGS  +=  $(INCLUDE) -D__3DS__ `$(PREFIX)pkg-config opusfile --cflags`
+CFLAGS	+=	$(INCLUDE) -D__3DS__ `$(PREFIX)pkg-config opusfile --cflags`
 
 CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++11
 
@@ -115,7 +117,7 @@ endif
 #---------------------------------------------------------------------------------
 ifeq ($(GFXBUILD),$(BUILD))
 #---------------------------------------------------------------------------------
-export T3XFILES :=  $(GFXFILES:.t3s=.t3x)
+export T3XFILES :=	$(GFXFILES:.t3s=.t3x)
 #---------------------------------------------------------------------------------
 else
 #---------------------------------------------------------------------------------
@@ -125,7 +127,7 @@ export T3XHFILES		:=	$(patsubst %.t3s, $(BUILD)/%.h, $(GFXFILES))
 endif
 #---------------------------------------------------------------------------------
 
-export OFILES_SOURCES 	:=	$(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o)
+export OFILES_SOURCES	:=	$(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o)
 
 export OFILES_BIN	:=	$(addsuffix .o,$(BINFILES)) \
 			$(PICAFILES:.v.pica=.shbin.o) $(SHLISTFILES:.shlist=.shbin.o) \
