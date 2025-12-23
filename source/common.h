@@ -11,8 +11,8 @@ extern volatile bool s_enable_metadata;
 
 // thread priorities
 // main thread is usually 0x30.
-#define THREAD_PRIO_AUDIO 0x18    // critical for feeder
-#define THREAD_PRIO_DECODER 0x24  // balanced priority (between audio and main)
+#define THREAD_PRIO_AUDIO 0x18   // critical for feeder
+#define THREAD_PRIO_DECODER 0x24 // balanced priority (between audio and main)
 
 #define THREAD_PRIO_STREAM 0x26   // below decoder, above main
 #define THREAD_PRIO_COVER 0x27    // just below stream, above main
@@ -21,9 +21,8 @@ extern volatile bool s_enable_metadata;
 
 #define RENDER_FPS_CAP 60
 
-
 // thread stack sizes
-#define AUDIO_STACK_SIZE (8 * 1024)   // smaller stack for feeder
+#define AUDIO_STACK_SIZE (8 * 1024)    // smaller stack for feeder
 #define DECODER_STACK_SIZE (64 * 1024) // large stack for opus decoding
 #define STREAM_STACK_SIZE (16 * 1024)
 

@@ -2,9 +2,9 @@
 #define STREAM_H
 
 #include "net.h"
+#include <3ds.h>
 #include <opusfile.h>
 #include <stdbool.h>
-#include <3ds.h>
 
 #define STREAM_BUF_SIZE (512 * 1024) // 512KB Buffer
 
@@ -14,15 +14,15 @@ typedef struct {
     size_t head; // Write pos
     size_t tail; // Read pos
     size_t count;
-    
+
     bool eof;
     volatile bool quit;
-    
+
     LightLock lock;
     LightEvent canRead;
     LightEvent canWrite;
-    
-    SecureCtx *net; 
+
+    SecureCtx *net;
     const char *url;
 } StreamQueue;
 

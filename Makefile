@@ -37,9 +37,9 @@ APP_TITLE	:=	Tripletail FM
 APP_DESCRIPTION	:=	Radio Player for Tripletail FM
 APP_AUTHOR	:=	BlueberryWolf
 BUILD		:=	build
-SOURCES		:=	source
+SOURCES		:=	source lib/kissfft
 DATA		:=	data
-INCLUDES	:=	include
+INCLUDES	:=	include lib/kissfft
 GRAPHICS	:=	gfx
 GFXBUILD	:=	$(BUILD)
 #ROMFS		:=	romfs
@@ -53,7 +53,7 @@ ARCH	:=	-march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
 # NOTE ffast-math might fuck some stuff up???
 
 CFLAGS  :=  -g -Wall -Wextra -Wshadow -Wimplicit -O2 -mword-relocations \
-			-ffast-math \
+            -fno-math-errno -f--ffast-math \
             -ffunction-sections \
             -std=c99 \
             $(ARCH)

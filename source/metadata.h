@@ -2,10 +2,10 @@
 #include <3ds.h>
 
 typedef struct {
-  char title[128];
-  char artist[128];
-  char art[256];
-  int listeners;
+    char title[128];
+    char artist[128];
+    char art[256];
+    int listeners;
 } Metadata;
 
 extern Metadata current_metadata;

@@ -3,7 +3,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-
 #define MAX_MSGS 500
 #define MAX_TYPERS 10
 #define TYPING_TIMEOUT 3000
@@ -12,49 +11,49 @@
 #include <citro2d.h>
 
 typedef struct {
-  char emoji[16];
-  char users[MAX_REACT_USERS][32];
-  int user_count;
+    char emoji[16];
+    char users[MAX_REACT_USERS][32];
+    int user_count;
 } Reaction;
 
 typedef struct {
-  uint32_t uid;
-  char id[48];
-  char user[32];
-  char text[512];
-  char user_color[16];
-  u32 user_color_parsed;  // cached parsed color
-  char replyTo[48];
-  uint64_t receivedAt; // milliseconds
+    uint32_t uid;
+    char id[48];
+    char user[32];
+    char text[512];
+    char user_color[16];
+    u32 user_color_parsed; // cached parsed color
+    char replyTo[48];
+    uint64_t receivedAt; // milliseconds
 
-  Reaction reactions[MAX_REACTIONS];
-  int reaction_count;
+    Reaction reactions[MAX_REACTIONS];
+    int reaction_count;
 
-  bool deleted;
+    bool deleted;
 
-  // rendering cache
-  C2D_Text msgText;
-  C2D_Text userText;
-  bool text_cached;
+    // rendering cache
+    C2D_Text msgText;
+    C2D_Text userText;
+    bool text_cached;
 } ChatMessage;
 
 typedef struct {
-  char user[32];
-  uint64_t last_typed;
+    char user[32];
+    uint64_t last_typed;
 } Typer;
 
 typedef struct {
-  ChatMessage messages[MAX_MSGS];
-  int count;
+    ChatMessage messages[MAX_MSGS];
+    int count;
 
-  Typer typers[MAX_TYPERS];
-  int typer_count;
+    Typer typers[MAX_TYPERS];
+    int typer_count;
 
-  bool isConnected;
-  char username[32];
-  char userColor[16];
+    bool isConnected;
+    char username[32];
+    char userColor[16];
 
-  SecureCtx *netCtx;
+    SecureCtx *netCtx;
 } ChatStore;
 
 extern ChatStore chat_store;

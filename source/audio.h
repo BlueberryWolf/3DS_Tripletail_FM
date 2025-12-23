@@ -18,11 +18,10 @@ void audio_signal_exit(void);
 // audio feeding thread (NDSP)
 void audio_thread(void *arg);
 
-// audio decoding thread 
+// audio decoding thread
 void audio_decoder_thread(void *arg);
 
 extern int16_t *g_audio_buffer;
 extern uint32_t g_audio_buffer_num_samples;
-
 
 #endif
