@@ -39,6 +39,7 @@ static void metadata_thread_func(void *arg) {
 int main(void) {
     // init
     gfxInitDefault();
+    romfsInit();
     render_init();
     osSetSpeedupEnable(true);
     net_init();

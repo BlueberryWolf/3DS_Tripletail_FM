@@ -56,12 +56,22 @@ void UI_Osciloscope_Draw(float x, float y, float w, float h) {
         const float sampleX      = x + i * step;
         const float sampleHeight = smoothed_values[i] * scale;
 
-        // Background
-        C2D_DrawRectSolid(sampleX, (y + (h / 2)), 0.5F, step, sampleHeight,
-                          C2D_Color32(60, 60, 60, 255));
-        // Border
-        C2D_DrawRectSolid(sampleX, sampleHeight + (y + (h / 2)), 0.5F, step,
-                          sampleHeight, C2D_Color32(50, 50, 50, 255));
+        // colors
+        u32 c_white  = C2D_Color32(255, 255, 255, 25);  // 0.1 alpha
+        u32 c_purple = C2D_Color32(168, 85, 247, 230);  // 0.9 alpha
+        u32 c_mix    = C2D_Color32(211, 170, 251, 128); // mid-point
+
+        if (sampleHeight < 0) {
+            C2D_DrawRectangle(sampleX, (y + (h / 2)), 0.5F, step, sampleHeight,
+                              c_mix, c_mix,             // c1, c2 (center)
+                              c_white, c_white          // c3, c4 (top)
+            );
+        } else {
+            C2D_DrawRectangle(sampleX, (y + (h / 2)), 0.5F, step, sampleHeight,
+                              c_mix, c_mix,             // c1, c2 (center)
+                              c_purple, c_purple        // c3, c4 (bottom)
+            );
+        }
     }
 }
 

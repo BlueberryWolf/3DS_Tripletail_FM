@@ -44,7 +44,7 @@ DATA			:= data
 INCLUDES		:= include lib/kissfft
 GRAPHICS		:= gfx
 GFXBUILD		:= $(BUILD)
-#ROMFS		:=	romfs
+ROMFS		:=	romfs
 #GFXBUILD	:=	$(ROMFS)/gfx
 
 #---------------------------------------------------------------------------------

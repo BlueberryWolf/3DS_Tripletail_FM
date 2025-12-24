@@ -30,17 +30,20 @@ static void RecacheAll(void) {
 void UI_Chat_Draw(float x, float y, float w, float h) {
     (void) x;
     (void) w;
+
+    // chat overlay background
+    C2D_DrawRectSolid(0, 0, 0.5f, 320, 240, COLOR_GLASS_CHAT);
+
     float currentY   = y + h - 20;
     float scale      = 0.5f;
-    float lineHeight = 16.0f;
+    float lineHeight = 20.0f;
 
     // typers
     if (chat_store.typer_count > 0) {
         char buf[128];
         snprintf(buf, sizeof(buf), "%s typing...", chat_store.typers[0].user);
-        Text_Draw(0xF0000004, buf, 5, currentY, scale,
-                  C2D_Color32(255, 255, 0, 255),
-                  C2D_WithColor | C2D_AtBaseline);
+        Text_Draw(0xF0000004, FONT_REGULAR, buf, 5, currentY, scale,
+                  COLOR_COMMAND, C2D_WithColor | C2D_AtBaseline);
         currentY -= lineHeight;
     }
 
@@ -50,7 +53,8 @@ void UI_Chat_Draw(float x, float y, float w, float h) {
     static float colonW     = 0.0f;
 
     if (!s_colonInit) {
-        C2D_TextParse(&s_colonText, g_chatBuf, ": ");
+        C2D_TextFontParse(&s_colonText, Text_GetFont(FONT_REGULAR), g_chatBuf,
+                          ": ");
         C2D_TextOptimize(&s_colonText);
         float h_tmp;
         C2D_TextGetDimensions(&s_colonText, scale, scale, &colonW, &h_tmp);
@@ -63,7 +67,7 @@ void UI_Chat_Draw(float x, float y, float w, float h) {
         s_colonInit = false;
     }
 
-#define MAX_VISIBLE_MESSAGES 14
+#define MAX_VISIBLE_MESSAGES 12
     LightLock_Lock(&chat_lock);
 
     int start = chat_store.count > MAX_VISIBLE_MESSAGES
@@ -79,12 +83,26 @@ void UI_Chat_Draw(float x, float y, float w, float h) {
 
         // cache text
         if (!m->text_cached) {
-            // parse user
-            C2D_TextParse(&m->userText, g_chatBuf, m->user);
+            // parse user, trimming whitespace
+            char clean_user[32];
+            strncpy(clean_user, m->user, 31);
+            clean_user[31] = '\0';
+            
+            // trim right
+            size_t len = strlen(clean_user);
+            while(len > 0 && (unsigned char)clean_user[len-1] <= ' ') clean_user[--len] = 0;
+            
+            // trim left
+            char *p = clean_user;
+            while(*p && (unsigned char)*p <= ' ') p++;
+            
+            C2D_TextFontParse(&m->userText, Text_GetFont(FONT_BLACK), g_chatBuf,
+                              p);
             C2D_TextOptimize(&m->userText);
 
             // parse message
-            C2D_TextParse(&m->msgText, g_chatBuf, m->text);
+            C2D_TextFontParse(&m->msgText, Text_GetFont(FONT_REGULAR),
+                              g_chatBuf, m->text);
             C2D_TextOptimize(&m->msgText);
 
             m->text_cached = true;
@@ -94,20 +112,19 @@ void UI_Chat_Draw(float x, float y, float w, float h) {
         }
 
         // draw
-        float currentX = 5.0f;
+        float currentX = 10.0f; // left padding
+        float userW    = Text_GetVisualWidth(&m->userText) * scale;
 
         // user
         C2D_DrawText(&m->userText, C2D_WithColor | C2D_AtBaseline, currentX,
                      currentY, 0.5f, scale, scale, m->user_color_parsed);
-
-        // width
-        float userW, userH;
-        C2D_TextGetDimensions(&m->userText, scale, scale, &userW, &userH);
-        currentX += userW;
+        
+        currentX += userW + 2.0f; // small padding
 
         // colon (use cached dimensions)
         if (!s_colonInit) {
-            C2D_TextParse(&s_colonText, g_chatBuf, ": ");
+            C2D_TextFontParse(&s_colonText, Text_GetFont(FONT_REGULAR),
+                              g_chatBuf, ": ");
             C2D_TextOptimize(&s_colonText);
             float h_tmp; // unused
             C2D_TextGetDimensions(&s_colonText, scale, scale, &colonW, &h_tmp);
@@ -115,13 +132,13 @@ void UI_Chat_Draw(float x, float y, float w, float h) {
         }
         C2D_DrawText(&s_colonText, C2D_WithColor | C2D_AtBaseline, currentX,
                      currentY, 0.5f, scale, scale,
-                     C2D_Color32(200, 200, 200, 255));
+                     COLOR_TEXT_MUTED);
         currentX += colonW;
 
-        // messag
+        // message
         C2D_DrawText(&m->msgText, C2D_WithColor | C2D_AtBaseline, currentX,
                      currentY, 0.5f, scale, scale,
-                     C2D_Color32(230, 230, 230, 255));
+                     COLOR_TEXT_PRIMARY);
 
         currentY -= lineHeight;
     }

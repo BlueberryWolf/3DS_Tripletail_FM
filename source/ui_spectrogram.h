@@ -20,6 +20,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 CircularBuffer osc_cb;
+float g_bassLevel = 0.0f;
 
 // NOTE: this should not be bigger than CB_SIZE / 2, due to nyquist
 #define SIZE_FOR_THINGIES (CB_SIZE / 8)
@@ -77,13 +78,28 @@ void UI_Spectrogram_Draw(float x, float y, float w, float h) {
         cfg = kiss_fftr_alloc(CB_SIZE, 0, NULL, NULL);
     }
 
-    // Ring Buffer Stuff
+    // Ring Buffer Stuff & Volume Calc
+    float volSum = 0.0f;
     for (int i = 0; i < CB_SIZE; i++) {
         //// TODO: get rid of modulo here
         uint16_t idx = (osc_cb.write_pos + i) % CB_SIZE;
         // timedata[i] = (float)osc_cb.left[idx] / 32768.0F;
-        timedata[i] = (float) osc_cb.left[idx] * INT16_TO_FLT;
+        float val = (float) osc_cb.left[idx] * INT16_TO_FLT;
+        timedata[i] = val;
+        
+        // accumulate absolute value for volume
+        if (val < 0.0f) val = -val;
+        volSum += val;
     }
+    
+    // calculate mean volume
+    float rawBass = (volSum / (float)CB_SIZE) * 3.0f;
+    if (rawBass > 1.0f) rawBass = 1.0f;
+
+    // smooth the global bass level
+    static float bassSmooth = 0.0f;
+    bassSmooth = bassSmooth * 0.95f + rawBass * 0.05f;
+    g_bassLevel = bassSmooth;
 
     // FFT
     kiss_fft_cpx freqdata[HALF_CB + 1];
@@ -110,8 +126,9 @@ void UI_Spectrogram_Draw(float x, float y, float w, float h) {
         float bar_x = x + i * bar_width;
         float bar_y = y + h - bar_height;
 
-        C2D_DrawRectSolid(bar_x, bar_y, 0.5F, bar_width - 1.0F, bar_height,
-                          C2D_Color32(60, 60, 60, 255));
+        C2D_DrawRectangle(bar_x, bar_y, 0.5F, bar_width - 1.0F, bar_height,
+                          C2D_Color32(255, 255, 255, 25),  C2D_Color32(255, 255, 255, 25),
+                          C2D_Color32(168, 85, 247, 230), C2D_Color32(168, 85, 247, 230));
     }
 }
 

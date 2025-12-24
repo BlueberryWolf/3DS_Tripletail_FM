@@ -10,13 +10,19 @@
 #define SCREEN_WIDTH_BOTTOM 320
 #define SCREEN_HEIGHT_BOTTOM 240
 
-// colors
-#define COLOR_TEXT_WHITE C2D_Color32(255, 255, 255, 255)
-#define COLOR_TEXT_GRAY C2D_Color32(200, 200, 200, 255)
-#define COLOR_TEXT_DARK_GRAY C2D_Color32(150, 150, 150, 255)
-#define COLOR_BACKGROUND C2D_Color32(30, 30, 30, 255)
-#define COLOR_CHAT_BG C2D_Color32(20, 20, 20, 255)
-#define COLOR_TYPING C2D_Color32(255, 255, 0, 255)
+// palette
+#define COLOR_BG_NAVY C2D_Color32(0, 6, 38, 255)
+#define COLOR_GLASS_PLAYER C2D_Color32(0, 6, 38, 128)            // 0.5 alpha
+#define COLOR_GLASS_CHAT C2D_Color32(0, 0, 0, 51)                // 0.2 alpha
+
+#define COLOR_TEXT_PRIMARY C2D_Color32(255, 255, 255, 255)
+#define COLOR_TEXT_SECONDARY C2D_Color32(255, 255, 255, 127)     // 0.8 alpha
+#define COLOR_TEXT_MUTED C2D_Color32(255, 255, 255, 102)         // 0.4 alpha
+
+#define COLOR_ACCENT_PURPLE_START C2D_Color32(123, 75, 255, 255) // #7b4bff
+#define COLOR_ACCENT_PURPLE_END C2D_Color32(155, 109, 255, 255)  // #9b6dff
+#define COLOR_COMMAND C2D_Color32(162, 155, 254, 255)            // #a29bfe
+#define COLOR_TYPING C2D_Color32(255, 255, 0, 255)               // #ffff00
 
 // layout constants
 #define PADDING 10.0f
