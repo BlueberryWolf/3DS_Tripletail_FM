@@ -21,7 +21,7 @@ volatile bool s_enable_chat     = true;
 volatile bool s_enable_cover    = true;
 volatile bool s_enable_metadata = true;
 
-static const char *STREAM_URL = "https://radio.blueberry.coffee/3ds.ogg";
+static const char *STREAM_URL = "https://radio.blueberry.coffee/radio.ogg";
 
 // threads
 static void metadata_thread_func(void *arg) {

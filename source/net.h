@@ -10,6 +10,8 @@
 
 #define SOC_ALIGN 0x1000
 #define SOC_BUFFERSIZE 0x100000
+#define NET_TIMEOUT_MS   5000
+#define HTTP_USER_AGENT  "3DS_Tripletail_FM/1.0"
 
 typedef struct {
     mbedtls_net_context fd;
@@ -25,7 +27,7 @@ typedef struct {
     size_t pushPos;
 } SecureCtx;
 
-void net_init(void);
+int net_init(void);
 void net_exit(void);
 bool connect_ssl(SecureCtx *ctx, const char *host, const char *port);
 void cleanup_ssl(SecureCtx *ctx);

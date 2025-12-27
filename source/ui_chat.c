@@ -35,8 +35,8 @@ void UI_Chat_Draw(float x, float y, float w, float h) {
     C2D_DrawRectSolid(0, 0, 0.5f, 320, 240, COLOR_GLASS_CHAT);
 
     float currentY   = y + h - 20;
-    float scale      = 0.5f;
-    float lineHeight = 20.0f;
+    float scale      = 0.65f;
+    float lineHeight = 18.0f;
 
     // typers
     if (chat_store.typer_count > 0) {

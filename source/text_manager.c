@@ -29,6 +29,13 @@ struct C2D_TextBuf_s {
 float Text_GetVisualWidth(const C2D_Text *text) {
     if (text->end <= text->begin) return 0.0f; // empty
     
+    // fix for system font
+    if (!text->font) {
+         float w, h;
+         C2D_TextGetDimensions(text, 1.0f, 1.0f, &w, &h);
+         return w;
+    }
+
     struct C2D_TextBuf_s* buf = (struct C2D_TextBuf_s*)text->buf;
     if (!buf) return 0.0f;
 
